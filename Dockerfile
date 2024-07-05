@@ -6,6 +6,11 @@ ENV PYTHONDONTWRITEBYTECODE=1
 # Prevent Python from buffering stdin/stdout
 ENV PYTHONUNBUFFERED=1
 
+RUN apt-get update && \
+    apt-get upgrade -y && \
+    apt-get install -y build-essential python3-dev libldap2-dev libsasl2-dev && \
+    rm -rf /var/lib/apt/lists/*
+
 RUN useradd -m django
 WORKDIR /home/django
 
