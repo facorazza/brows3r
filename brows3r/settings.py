@@ -10,7 +10,7 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.0/ref/settings/
 """
 
-import os
+import os, sys
 import ldap
 from pathlib import Path
 from django_auth_ldap.config import LDAPSearch, GroupOfNamesType
@@ -40,6 +40,7 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
+    "users",
 ]
 
 MIDDLEWARE = [
@@ -57,7 +58,7 @@ ROOT_URLCONF = "brows3r.urls"
 TEMPLATES = [
     {
         "BACKEND": "django.template.backends.django.DjangoTemplates",
-        "DIRS": [],
+        "DIRS": [ BASE_DIR / "templates" ],
         "APP_DIRS": True,
         "OPTIONS": {
             "context_processors": [
@@ -124,3 +125,45 @@ STATIC_URL = "static/"
 # https://docs.djangoproject.com/en/5.0/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+
+
+# Login
+
+LOGIN_URL = "/users/login"
+
+# Authentication backends
+
+AUTHENTICATION_BACKENDS = [
+    "django_auth_ldap.backend.LDAPBackend",
+    "django.contrib.auth.backends.ModelBackend",
+]
+
+
+# LDAP
+
+AUTH_LDAP_SERVER_URI = os.environ.get("AUTH_LDAP_SERVER_URI")
+
+if AUTH_LDAP_SERVER_URI is None:
+    sys.exit("Missing environment variable AUTH_LDAP_SERVER_URI.")
+
+AUTH_LDAP_BIND_DN = os.environ.get("AUTH_LDAP_BIND_DN")
+AUTH_LDAP_BIND_PASSWORD = os.environ.get("AUTH_LDAP_BIND_PASSWORD")
+
+AUTH_LDAP_USER_DN_TEMPLATE = os.environ.get("AUTH_LDAP_USER_DN_TEMPLATE")
+
+if AUTH_LDAP_USER_DN_TEMPLATE is None:
+    sys.exit("Missing environment variable AUTH_LDAP_USER_DN_TEMPLATE.")
+
+if "%(user)s" not in AUTH_LDAP_USER_DN_TEMPLATE:
+    sys.exit("The environment variable AUTH_LDAP_USER_DN_TEMPLATE is missing the user template %(user)s.")
+
+AUTH_LDAP_GROUP_SEARCH = LDAPSearch(
+    os.environ.get("AUTH_LDAP_GROUP_SEARCH"),
+    ldap.SCOPE_SUBTREE,
+    "(objectClass=groupOfNames)",
+)
+AUTH_LDAP_GROUP_TYPE = GroupOfNamesType(name_attr="cn")
+AUTH_LDAP_USER_ATTR_MAP = {
+    "username": "uid",
+    "email": "mail",
+}

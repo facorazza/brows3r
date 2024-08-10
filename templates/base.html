@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <link rel="stylesheet" href="https://matcha.mizu.sh/matcha.css">
+        {% block head %}{% endblock %}
+        <style>
+            .title {
+                font-size: 2em;
+                margin-bottom: 20px;
+            }
+            .login-container {
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                height: 100vh;
+            }
+            .login-form {
+                width: 300px;
+                padding: 20px;
+                box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+                border-radius: 8px;
+            }
+        </style>
+    </head>
+    {% comment %} {% include "header.html" %} {% endcomment %}
+    {% block content %}{% endblock %}
+    {% comment %} {% include "footer.html" %} {% endcomment %}
+</html>
