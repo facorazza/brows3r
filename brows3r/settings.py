@@ -40,6 +40,7 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
+    "browser",
     "users",
 ]
 
@@ -115,11 +116,19 @@ USE_I18N = True
 
 USE_TZ = True
 
+# S3
+
+S3_ACCESS_KEY_ID = os.environ.get("S3_ACCESS_KEY_ID")
+S3_ACCESS_KEY_SECRET = os.environ.get("S3_ACCESS_KEY_SECRET")
+S3_BUCKET = os.environ.get("S3_BUCKET")
+S3_REGION = os.environ.get("S3_REGION")
+S3_URL = os.environ.get("S3_URL")
 
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.0/howto/static-files/
 
 STATIC_URL = "static/"
+
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.0/ref/settings/#default-auto-field
@@ -130,6 +139,7 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 # Login
 
 LOGIN_URL = "/users/login"
+
 
 # Authentication backends
 
