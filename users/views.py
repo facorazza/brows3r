@@ -4,10 +4,12 @@ from django.contrib.auth.models import User
 from django.shortcuts import render, redirect
 from .forms import LoginForm
 
+
 @login_required
 def user_list(request):
     users = User.objects.all()
     return render(request, "users/list.html", {"users": users})
+
 
 def login_view(request):
     if request.method == "POST":
@@ -27,6 +29,7 @@ def login_view(request):
         form = LoginForm()
 
     return render(request, "users/login.html", {"form": form})
+
 
 def logout_view(request):
     logout(request)

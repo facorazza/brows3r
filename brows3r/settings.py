@@ -23,7 +23,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/5.0/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = "django-insecure-q=bgildwipz%0v=g03tp4u#0^6oi#fs+q1q$ts0$ph+wq#gk#6"
+SECRET_KEY = os.environ.get("SECRET_KEY")
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
@@ -59,7 +59,7 @@ ROOT_URLCONF = "brows3r.urls"
 TEMPLATES = [
     {
         "BACKEND": "django.template.backends.django.DjangoTemplates",
-        "DIRS": [ BASE_DIR / "templates" ],
+        "DIRS": [BASE_DIR / "templates"],
         "APP_DIRS": True,
         "OPTIONS": {
             "context_processors": [
@@ -165,7 +165,9 @@ if AUTH_LDAP_USER_DN_TEMPLATE is None:
     sys.exit("Missing environment variable AUTH_LDAP_USER_DN_TEMPLATE.")
 
 if "%(user)s" not in AUTH_LDAP_USER_DN_TEMPLATE:
-    sys.exit("The environment variable AUTH_LDAP_USER_DN_TEMPLATE is missing the user template %(user)s.")
+    sys.exit(
+        "The environment variable AUTH_LDAP_USER_DN_TEMPLATE is missing the user template %(user)s."
+    )
 
 AUTH_LDAP_GROUP_SEARCH = LDAPSearch(
     os.environ.get("AUTH_LDAP_GROUP_SEARCH"),

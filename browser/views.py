@@ -20,6 +20,7 @@ s3 = boto3.client(
     region_name=settings.S3_REGION,
 )
 
+
 @login_required
 @require_http_methods(["GET"])
 def list(request, path):
@@ -35,17 +36,18 @@ def list(request, path):
 
     files = [
         {
-            "full_path": f["Key"][len(request.user.username) + 1:],
-            "name": f["Key"][len(prefix):],
+            "full_path": f["Key"][len(request.user.username) + 1 :],
+            "name": f["Key"][len(prefix) :],
             "size": f["Size"],
-            "last_modified": f["LastModified"]
+            "last_modified": f["LastModified"],
         }
-        for f in response.get("Contents", []) if f["Key"] != prefix
+        for f in response.get("Contents", [])
+        if f["Key"] != prefix
     ]
     directories = [
         {
-            "full_path": d["Prefix"][len(request.user.username) + 1:],
-            "name": d["Prefix"][len(prefix):-1]
+            "full_path": d["Prefix"][len(request.user.username) + 1 :],
+            "name": d["Prefix"][len(prefix) : -1],
         }
         for d in response.get("CommonPrefixes", [])
     ]
@@ -57,8 +59,9 @@ def list(request, path):
             "path": path,
             "files": files,
             "directories": directories,
-        }
+        },
     )
+
 
 @login_required
 @require_http_methods(["POST"])
@@ -68,9 +71,10 @@ def create_directory(request):
 
     s3.put_object(
         Bucket=settings.S3_BUCKET,
-        Key="/".join(filter(None, [request.user.username, path, new_dir]))
+        Key="/".join(filter(None, [request.user.username, path, new_dir])),
     )
     return redirect("browser:list", path="/".join(filter(None, [path, new_dir])))
+
 
 @login_required
 @require_http_methods(["GET"])
@@ -89,6 +93,7 @@ def delete(request, path):
         path = "/".join(path.split("/")[:-1])
     return redirect("browser:list", path=path)
 
+
 def delete_directory_recursive(prefix):
     paginator = s3.get_paginator("list_objects_v2")
     pages = paginator.paginate(
@@ -98,13 +103,12 @@ def delete_directory_recursive(prefix):
 
     for page in pages:
         if "Contents" in page:
-            objects_to_delete = [
-                {"Key": obj["Key"]} for obj in page["Contents"]
-            ]
+            objects_to_delete = [{"Key": obj["Key"]} for obj in page["Contents"]]
             s3.delete_objects(
                 Bucket=settings.S3_BUCKET,
                 Delete={"Objects": objects_to_delete},
             )
+
 
 @login_required
 @require_http_methods(["GET"])
@@ -123,6 +127,7 @@ def download(request, path):
     except botocore.exceptions.ClientError:
         return HttpResponse("File not found", status=404)
 
+
 @login_required
 @require_http_methods(["POST"])
 def upload(request):
@@ -134,6 +139,7 @@ def upload(request):
         f"{request.user.username}/{path}/{file.name}",
     )
     return redirect("browser:list", path=path)
+
 
 # def move_item(request, source_path):
 #     if request.method == "POST":
