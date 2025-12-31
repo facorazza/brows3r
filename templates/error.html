@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+
+{% block title %}Error - BrowS3r{% endblock %}
+
+{% block content %}
+<div style="text-align: center; padding: 50px;">
+    <h1>{{ status_code }}</h1>
+    <h2>{{ title }}</h2>
+    <p>{{ message }}</p>
+    <p><a href="/">Go Home</a></p>
+</div>
+{% endblock %}

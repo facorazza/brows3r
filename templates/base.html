@@ -4,7 +4,7 @@
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <link rel="stylesheet" href="https://matcha.mizu.sh/matcha.css">
-        {% block head %}{% endblock %}
+        <title>{% block title %}BrowS3r{% endblock %}</title>
         <style>
             .title {
                 font-size: 2em;
@@ -24,7 +24,7 @@
             }
         </style>
     </head>
-    {% comment %} {% include "header.html" %} {% endcomment %}
-    {% block content %}{% endblock %}
-    {% comment %} {% include "footer.html" %} {% endcomment %}
+    <body>
+        {% block content %}{% endblock %}
+    </body>
 </html>

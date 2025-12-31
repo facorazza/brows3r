@@ -1,27 +1,49 @@
-FROM python:3.12-slim
+# Build stage
+FROM rust:1.75-slim as builder
 
-# Prevent Python from writing out pyc files
-ENV PYTHONDONTWRITEBYTECODE=1
+WORKDIR /app
 
-# Prevent Python from buffering stdin/stdout
-ENV PYTHONUNBUFFERED=1
+# Install build dependencies
+RUN apt-get update && apt-get install -y \
+    pkg-config \
+    libssl-dev \
+    && rm -rf /var/lib/apt/lists/*
 
-RUN apt-get update && \
-    apt-get upgrade -y && \
-    apt-get install -y build-essential python3-dev libldap2-dev libsasl2-dev && \
-    rm -rf /var/lib/apt/lists/*
+# Copy manifests
+COPY Cargo.toml Cargo.lock* ./
 
-RUN useradd -m django
-WORKDIR /home/django
+# Copy source code
+COPY src ./src
+COPY templates ./templates
+COPY migrations ./migrations
 
-RUN python -m pip install --upgrade pip
+# Build the application
+RUN cargo build --release
 
-COPY requirements.txt .
-RUN python -m pip install --no-cache-dir -r requirements.txt
+# Runtime stage
+FROM debian:bookworm-slim
 
-COPY . .
-RUN chmod +x docker-entrypoint.sh
+WORKDIR /app
 
-USER django
+# Install runtime dependencies
+RUN apt-get update && apt-get install -y \
+    ca-certificates \
+    libssl3 \
+    && rm -rf /var/lib/apt/lists/*
 
-CMD [ "./docker-entrypoint.sh" ]
+# Copy the binary from builder
+COPY --from=builder /app/target/release/brows3r /usr/local/bin/brows3r
+
+# Copy templates and migrations
+COPY templates ./templates
+COPY migrations ./migrations
+
+# Create a non-root user
+RUN useradd -m -u 1000 appuser && \
+    chown -R appuser:appuser /app
+
+USER appuser
+
+EXPOSE 8000
+
+CMD ["brows3r"]

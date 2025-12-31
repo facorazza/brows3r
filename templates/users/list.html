@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+
+{% block title %}BrowS3r - Users{% endblock %}
+
+{% block content %}
+    <h1>BrowS3r - Users</h1>
+    
+    <table>
+        <thead>
+            <tr>
+                <th>Username</th>
+                <th>Email</th>
+                <th>Created At</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for user in users %}
+                <tr>
+                    <td>{{ user.username }}</td>
+                    <td>
+                        {% match user.email %}
+                            {% when Some with (email) %}
+                                {{ email }}
+                            {% when None %}
+                                -
+                        {% endmatch %}
+                    </td>
+                    <td>{{ user.created_at.format("%Y-%m-%d %H:%M:%S") }}</td>
+                </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+{% endblock %}
