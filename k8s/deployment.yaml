@@ -1,0 +1,51 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: brows3r
+  namespace: brows3r
+  labels:
+    app: brows3r
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: brows3r
+  template:
+    metadata:
+      labels:
+        app: brows3r
+    spec:
+      containers:
+      - name: brows3r
+        image: brows3r:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 8000
+          name: http
+        envFrom:
+        - configMapRef:
+            name: brows3r-config
+        - secretRef:
+            name: brows3r-secret
+        env:
+        - name: RUST_LOG
+          value: "brows3r=info,tower_http=info"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: 8000
+          initialDelaySeconds: 5
+          periodSeconds: 5
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
