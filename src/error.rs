@@ -1,3 +1,4 @@
+use askama::Template;
 use axum::{
     http::StatusCode,
     response::{Html, IntoResponse, Response},
@@ -9,7 +10,6 @@ use crate::templates::ErrorTemplate;
 #[derive(Debug)]
 pub enum AppError {
     Database(sqlx::Error),
-    S3(aws_sdk_s3::error::SdkError<aws_sdk_s3::operation::get_object::GetObjectError>),
     S3Generic(String),
     Authentication,
     NotFound,
@@ -22,7 +22,6 @@ impl fmt::Display for AppError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             AppError::Database(e) => write!(f, "Database error: {}", e),
-            AppError::S3(e) => write!(f, "S3 error: {}", e),
             AppError::S3Generic(e) => write!(f, "S3 error: {}", e),
             AppError::Authentication => write!(f, "Authentication failed"),
             AppError::NotFound => write!(f, "Resource not found"),
@@ -44,14 +43,6 @@ impl IntoResponse for AppError {
                     StatusCode::INTERNAL_SERVER_ERROR,
                     "Database Error".to_string(),
                     "An error occurred while accessing the database.".to_string(),
-                )
-            }
-            AppError::S3(e) => {
-                tracing::error!("S3 error: {:?}", e);
-                (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    "Storage Error".to_string(),
-                    "An error occurred while accessing storage.".to_string(),
                 )
             }
             AppError::S3Generic(e) => {

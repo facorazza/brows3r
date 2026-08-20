@@ -1,18 +1,49 @@
 #[cfg(test)]
+#[allow(clippy::module_inception)]
 mod tests {
     use crate::{config::Config, state::AppState};
     use axum_test::TestServer;
-    use sqlx::SqlitePool;
+    use sqlx::sqlite::SqlitePoolOptions;
+    use std::sync::OnceLock;
+    use tower_sessions_sqlx_store::SqliteStore;
+
+    fn metrics_handle() -> metrics_exporter_prometheus::PrometheusHandle {
+        static HANDLE: OnceLock<metrics_exporter_prometheus::PrometheusHandle> = OnceLock::new();
+        HANDLE
+            .get_or_init(|| {
+                metrics_exporter_prometheus::PrometheusBuilder::new()
+                    .install_recorder()
+                    .expect("failed to install prometheus recorder")
+            })
+            .clone()
+    }
 
     async fn create_test_app() -> TestServer {
-        // Setup test database
-        let pool = SqlitePool::connect(":memory:").await.unwrap();
-        sqlx::migrate!("./migrations").run(&pool).await.unwrap();
+        // A single connection is required so the in-memory database is shared
+        let pool = SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect(":memory:")
+            .await
+            .unwrap();
 
-        // Create test config (you'll need to mock or use test S3)
+        // SQLite-compatible schema (the Postgres migration is not portable)
+        sqlx::query(
+            "CREATE TABLE IF NOT EXISTS users (
+                id TEXT PRIMARY KEY,
+                username TEXT NOT NULL UNIQUE,
+                password_hash TEXT,
+                email TEXT,
+                created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+            )",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+
         let config = Config {
             database_url: ":memory:".to_string(),
             secret_key: "test-secret-key".to_string(),
+            session_secure: false,
             s3_endpoint: "http://localhost:9000".to_string(),
             s3_region: "us-east-1".to_string(),
             s3_bucket: "test-bucket".to_string(),
@@ -32,14 +63,18 @@ mod tests {
 
         let s3_client = crate::s3::create_s3_client(&config).await;
 
+        let session_store = SqliteStore::new(pool.clone());
+        session_store.migrate().await.unwrap();
+
         let state = AppState {
             pool,
             s3_client,
             config,
+            metrics_handle: metrics_handle(),
         };
 
         // Build the router (same as main.rs)
-        let app = crate::build_router(state);
+        let app = crate::build_router(state, session_store);
 
         TestServer::new(app).unwrap()
     }

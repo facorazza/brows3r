@@ -5,6 +5,7 @@ use std::env;
 pub struct Config {
     pub database_url: String,
     pub secret_key: String,
+    pub session_secure: bool,
 
     // S3 Configuration
     pub s3_endpoint: String,
@@ -29,9 +30,11 @@ pub struct Config {
 impl Config {
     pub fn from_env() -> anyhow::Result<Self> {
         Ok(Config {
-            database_url: env::var("DATABASE_URL")
-                .unwrap_or_else(|_| "postgres://localhost/brows3r".to_string()),
+            database_url: env::var("DATABASE_URL").expect("DATABASE_URL must be set"),
             secret_key: env::var("SECRET_KEY").expect("SECRET_KEY must be set"),
+            session_secure: env::var("SESSION_SECURE")
+                .map(|v| v == "true" || v == "1")
+                .unwrap_or(false),
 
             s3_endpoint: env::var("S3_URL").expect("S3_URL must be set"),
             s3_region: env::var("S3_REGION").expect("S3_REGION must be set"),

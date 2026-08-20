@@ -11,7 +11,6 @@ ldap = ["ldap3"]
 # Web framework
 axum = { version = "0.8.8", features = ["macros", "multipart"] }
 tokio = { version = "1.48.0", features = ["full"] }
-tower = { version = "0.5.2", features = ["util"] }
 tower-http = { version = "0.6.8", features = [
     "fs",
     "trace",
@@ -30,6 +29,7 @@ sqlx = { version = "0.8.6", features = [
     "postgres",
     "runtime-tokio-rustls",
     "uuid",
+    "chrono",
 ] }
 
 # S3
@@ -43,15 +43,16 @@ serde_json = "1.0.148"
 # Logging
 tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.22", features = ["env-filter"] }
+
 # Metrics
 metrics = "0.24.3"
 metrics-exporter-prometheus = "0.18.1"
+
 # Environment
 dotenvy = "0.15.7"
 
 # Error handling
 anyhow = "1.0.100"
-thiserror = "2.0.17"
 
 # LDAP (optional feature)
 ldap3 = { version = "0.12.1", optional = true }
@@ -61,12 +62,12 @@ argon2 = "0.5.3"
 
 # Time
 chrono = { version = "0.4.42", features = ["serde"] }
+time = "0.3"
+
 # UUID
 uuid = { version = "1.11", features = ["v4", "serde"] }
-# HTTP client
-reqwest = { version = "0.12.28", default-features = false, features = [
-    "rustls-tls",
-] }
 
 [dev-dependencies]
 axum-test = "18.4.1"
+sqlx = { version = "0.8.6", features = ["sqlite"] }
+tower-sessions-sqlx-store = { version = "0.15.0", features = ["sqlite"] }

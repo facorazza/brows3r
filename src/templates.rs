@@ -2,12 +2,6 @@ use crate::models::S3Object;
 use askama::Template;
 
 #[derive(Template)]
-#[template(path = "base.html")]
-pub struct BaseTemplate<'a> {
-    pub title: &'a str,
-}
-
-#[derive(Template)]
 #[template(path = "browser/list.html")]
 pub struct BrowserListTemplate {
     pub path: String,

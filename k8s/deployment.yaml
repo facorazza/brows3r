@@ -15,10 +15,13 @@ spec:
       labels:
         app: brows3r
     spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
       containers:
       - name: brows3r
-        image: brows3r:latest
-        imagePullPolicy: IfNotPresent
+        image: ghcr.io/facorazza/brows3r:latest
+        imagePullPolicy: Always
         ports:
         - containerPort: 8000
           name: http

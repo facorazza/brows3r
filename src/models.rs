@@ -25,6 +25,8 @@ impl User {
         false
     }
 
+    /// Hash a plaintext password for bootstrapping users (no registration flow exists).
+    #[allow(dead_code)]
     pub fn hash_password(password: &str) -> Result<String, argon2::password_hash::Error> {
         use argon2::{
             Argon2,

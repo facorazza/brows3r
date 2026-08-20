@@ -1,5 +1,7 @@
+use askama::Template;
 use axum::{
     Form,
+    body::Body,
     extract::{Extension, Multipart, Path, State},
     http::{StatusCode, header},
     response::{Html, IntoResponse, Redirect, Response},
@@ -22,8 +24,13 @@ fn is_valid_name(name: &str) -> bool {
         && name != ".."
 }
 
-pub async fn list(
-    State(state): State<AppState>,
+// Reject path segments that could escape the user's S3 prefix
+fn is_safe_path(path: &str) -> bool {
+    path.split('/').all(|seg| seg != "." && seg != "..")
+}
+
+pub async fn list<DB: sqlx::Database>(
+    State(state): State<AppState<DB>>,
     Extension(user): Extension<User>,
     path: Option<Path<String>>,
 ) -> Result<Html<String>, AppError> {
@@ -61,8 +68,8 @@ pub struct CreateDirectoryForm {
     new_dir: String,
 }
 
-pub async fn create_directory(
-    State(state): State<AppState>,
+pub async fn create_directory<DB: sqlx::Database>(
+    State(state): State<AppState<DB>>,
     Extension(user): Extension<User>,
     Form(form): Form<CreateDirectoryForm>,
 ) -> Result<Redirect, AppError> {
@@ -74,10 +81,11 @@ pub async fn create_directory(
         ));
     }
 
+    // Directory marker objects end with "/" so they are listed as directories
     let key = if form.path.is_empty() {
-        format!("{}/{}", user.username, form.new_dir)
+        format!("{}/{}/", user.username, form.new_dir)
     } else {
-        format!("{}/{}/{}", user.username, form.path, form.new_dir)
+        format!("{}/{}/{}/", user.username, form.path, form.new_dir)
     };
 
     // Create empty object to represent directory
@@ -92,11 +100,15 @@ pub async fn create_directory(
     Ok(Redirect::to(&redirect_path))
 }
 
-pub async fn delete(
-    State(state): State<AppState>,
+pub async fn delete<DB: sqlx::Database>(
+    State(state): State<AppState<DB>>,
     Extension(user): Extension<User>,
     Path(path): Path<String>,
 ) -> Result<Redirect, AppError> {
+    if !is_safe_path(&path) {
+        return Err(AppError::NotFound);
+    }
+
     let full_path = format!("{}/{}", user.username, path);
 
     let is_directory = path.ends_with('/');
@@ -104,40 +116,48 @@ pub async fn delete(
     if is_directory {
         s3::delete_directory_recursive(&state.s3_client, &state.config.s3_bucket, &full_path)
             .await?;
-
-        // Navigate to parent directory
-        let parts: Vec<&str> = path.split('/').filter(|s| !s.is_empty()).collect();
-        let redirect_path = if parts.len() > 1 {
-            format!("/{}", parts[..parts.len() - 1].join("/"))
-        } else {
-            "/".to_string()
-        };
-        Ok(Redirect::to(&redirect_path))
     } else {
         s3::delete_object(&state.s3_client, &state.config.s3_bucket, &full_path).await?;
-
-        // Navigate to parent directory
-        let parts: Vec<&str> = path.split('/').collect();
-        let redirect_path = if parts.len() > 1 {
-            format!("/{}", parts[..parts.len() - 1].join("/"))
-        } else {
-            "/".to_string()
-        };
-        Ok(Redirect::to(&redirect_path))
     }
+
+    // Navigate to parent directory
+    let parts: Vec<&str> = path.split('/').filter(|s| !s.is_empty()).collect();
+    let redirect_path = if parts.len() > 1 {
+        format!("/{}", parts[..parts.len() - 1].join("/"))
+    } else {
+        "/".to_string()
+    };
+    Ok(Redirect::to(&redirect_path))
 }
 
-pub async fn download(
-    State(state): State<AppState>,
+pub async fn download<DB: sqlx::Database>(
+    State(state): State<AppState<DB>>,
     Extension(user): Extension<User>,
     Path(path): Path<String>,
 ) -> Result<Response, AppError> {
+    if !is_safe_path(&path) {
+        return Err(AppError::NotFound);
+    }
+
     let full_path = format!("{}/{}", user.username, path);
 
     let (body, content_type) =
         s3::get_object(&state.s3_client, &state.config.s3_bucket, &full_path).await?;
 
-    let filename = path.split('/').last().unwrap_or("download");
+    let bytes = body
+        .collect()
+        .await
+        .map_err(|e| AppError::Internal(e.to_string()))?
+        .into_bytes();
+
+    let filename = path.split('/').next_back().unwrap_or("download");
+    let safe_filename: String = filename
+        .chars()
+        .map(|c| match c {
+            '"' | '\r' | '\n' => '_',
+            _ => c,
+        })
+        .collect();
 
     Ok((
         StatusCode::OK,
@@ -145,21 +165,16 @@ pub async fn download(
             (header::CONTENT_TYPE, content_type),
             (
                 header::CONTENT_DISPOSITION,
-                format!("attachment; filename=\"{}\"", filename),
+                format!("attachment; filename=\"{}\"", safe_filename),
             ),
         ],
-        body,
+        Body::from(bytes),
     )
         .into_response())
 }
 
-#[derive(Deserialize)]
-pub struct UploadForm {
-    path: String,
-}
-
-pub async fn upload(
-    State(state): State<AppState>,
+pub async fn upload<DB: sqlx::Database>(
+    State(state): State<AppState<DB>>,
     Extension(user): Extension<User>,
     mut multipart: Multipart,
 ) -> Result<Redirect, AppError> {
@@ -167,7 +182,7 @@ pub async fn upload(
     let mut file_data: Option<(String, Vec<u8>)> = None;
     let mut total_size = 0usize;
 
-    while let Some(field) = multipart
+    while let Some(mut field) = multipart
         .next_field()
         .await
         .map_err(|e| AppError::Internal(e.to_string()))?
@@ -191,19 +206,21 @@ pub async fn upload(
                     ));
                 }
 
-                let data = field
-                    .bytes()
+                // Stream the file in chunks, enforcing the size limit as we go
+                let mut data = Vec::new();
+                while let Some(chunk) = field
+                    .chunk()
                     .await
                     .map_err(|e| AppError::Internal(e.to_string()))?
-                    .to_vec();
-
-                // Check file size
-                total_size += data.len();
-                if total_size > MAX_UPLOAD_SIZE {
-                    return Err(AppError::Internal(format!(
-                        "File too large. Maximum size is {} MB",
-                        MAX_UPLOAD_SIZE / 1024 / 1024
-                    )));
+                {
+                    total_size += chunk.len();
+                    if total_size > MAX_UPLOAD_SIZE {
+                        return Err(AppError::Internal(format!(
+                            "File too large. Maximum size is {} MB",
+                            MAX_UPLOAD_SIZE / 1024 / 1024
+                        )));
+                    }
+                    data.extend_from_slice(&chunk);
                 }
 
                 file_data = Some((filename, data));

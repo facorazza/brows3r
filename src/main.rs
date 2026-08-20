@@ -12,12 +12,13 @@ mod tests;
 
 use axum::{
     Router, middleware,
-    routing::{delete, get, post},
+    routing::{get, post},
 };
 use sqlx::postgres::PgPool;
 use std::net::SocketAddr;
+use time::Duration;
 use tower_http::{compression::CompressionLayer, trace::TraceLayer};
-use tower_sessions::{Expiry, SessionManagerLayer};
+use tower_sessions::{Expiry, SessionManagerLayer, session_store::SessionStore};
 use tower_sessions_sqlx_store::PostgresStore;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
@@ -28,30 +29,48 @@ use crate::{
     state::AppState,
 };
 
-fn build_router(state: AppState) -> Router {
-    let session_store = PostgresStore::new(state.pool.clone());
-
+fn build_router<DB, S>(state: AppState<DB>, session_store: S) -> Router
+where
+    DB: sqlx::Database,
+    for<'c> &'c mut DB::Connection: sqlx::Executor<'c, Database = DB>,
+    for<'q> <DB as sqlx::Database>::Arguments<'q>: sqlx::IntoArguments<'q, DB>,
+    for<'r> crate::models::User: sqlx::FromRow<'r, DB::Row>,
+    for<'q> uuid::Uuid: sqlx::Encode<'q, DB> + sqlx::Type<DB>,
+    for<'q> &'q str: sqlx::Encode<'q, DB>,
+    for<'q> String: sqlx::Encode<'q, DB> + sqlx::Type<DB>,
+    str: sqlx::Type<DB>,
+    S: SessionStore + Clone,
+{
     let session_layer = SessionManagerLayer::new(session_store)
-        .with_secure(false)
-        .with_expiry(Expiry::OnInactivity(chrono::Duration::hours(24)));
+        .with_secure(state.config.session_secure)
+        .with_expiry(Expiry::OnInactivity(Duration::hours(24)));
 
     let protected_routes = Router::new()
-        .route("/", get(browser::list))
-        .route("/*path", get(browser::list))
-        .route("/create-directory/", post(browser::create_directory))
-        .route("/delete/*path", delete(browser::delete))
-        .route("/download/*path", get(browser::download))
-        .route("/upload/", post(browser::upload))
-        .route("/users/", get(users::user_list))
-        .route_layer(middleware::from_fn_with_state(state.clone(), require_auth));
+        .route("/", get(browser::list::<DB>))
+        .route("/{*path}", get(browser::list::<DB>))
+        .route("/create-directory/", post(browser::create_directory::<DB>))
+        .route(
+            "/delete/{*path}",
+            get(browser::delete::<DB>).delete(browser::delete::<DB>),
+        )
+        .route("/download/{*path}", get(browser::download::<DB>))
+        .route("/upload/", post(browser::upload::<DB>))
+        .route("/users/", get(users::user_list::<DB>))
+        .route_layer(middleware::from_fn_with_state(
+            state.clone(),
+            require_auth::<DB>,
+        ));
 
     Router::new()
         .merge(protected_routes)
-        .route("/users/login/", get(users::login_form).post(users::login))
+        .route(
+            "/users/login/",
+            get(users::login_form).post(users::login::<DB>),
+        )
         .route("/users/logout/", get(users::logout))
         .route("/health", get(health::health_check))
-        .route("/ready", get(health::readiness_check))
-        .route("/metrics", get(health::metrics))
+        .route("/ready", get(health::readiness_check::<DB>))
+        .route("/metrics", get(health::metrics::<DB>))
         .layer(CompressionLayer::new())
         .layer(TraceLayer::new_for_http())
         .layer(session_layer)
@@ -101,7 +120,7 @@ async fn main() -> anyhow::Result<()> {
     };
 
     // Build router
-    let app = build_router(state);
+    let app = build_router(state, session_store);
 
     // Start server
     let addr = SocketAddr::from(([0, 0, 0, 0], 8000));

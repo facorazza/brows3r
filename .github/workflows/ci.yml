@@ -15,50 +15,53 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
-    
+
     - name: Setup Rust
       uses: dtolnay/rust-toolchain@stable
-    
+
+    - name: Install OpenSSL development headers
+      run: sudo apt-get update && sudo apt-get install -y libssl-dev pkg-config
+
     - name: Cache cargo registry
-      uses: actions/cache@v3
+      uses: actions/cache@v4
       with:
         path: ~/.cargo/registry
         key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
-    
+
     - name: Cache cargo index
-      uses: actions/cache@v3
+      uses: actions/cache@v4
       with:
         path: ~/.cargo/git
         key: ${{ runner.os }}-cargo-git-${{ hashFiles('**/Cargo.lock') }}
-    
+
     - name: Cache target directory
-      uses: actions/cache@v3
+      uses: actions/cache@v4
       with:
         path: target
         key: ${{ runner.os }}-cargo-build-target-${{ hashFiles('**/Cargo.lock') }}
-    
+
     - name: Run tests
-      run: cargo test --verbose
-    
+      run: cargo test --locked --verbose
+
     - name: Run tests with LDAP feature
-      run: cargo test --verbose --features ldap
+      run: cargo test --locked --verbose --features ldap
 
   lint:
     name: Lint
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
-    
+
     - name: Setup Rust
       uses: dtolnay/rust-toolchain@stable
       with:
         components: rustfmt, clippy
-    
+
     - name: Check formatting
       run: cargo fmt -- --check
-    
+
     - name: Run clippy
-      run: cargo clippy -- -D warnings
+      run: cargo clippy --locked -- -D warnings
 
   build:
     name: Build
@@ -66,15 +69,15 @@ jobs:
     needs: [test, lint]
     steps:
     - uses: actions/checkout@v4
-    
+
     - name: Setup Rust
       uses: dtolnay/rust-toolchain@stable
-    
+
     - name: Build release
-      run: cargo build --release --verbose
-    
+      run: cargo build --release --locked --verbose
+
     - name: Upload artifact
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: brows3r-binary
         path: target/release/brows3r

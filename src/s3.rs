@@ -2,6 +2,7 @@ use aws_config::BehaviorVersion;
 use aws_sdk_s3::{
     Client,
     config::{Credentials, Region},
+    primitives::ByteStream,
 };
 
 use crate::{config::Config, error::AppError, models::S3Object};
@@ -43,11 +44,15 @@ pub async fn list_objects(
 
     let prefix_len = username.len() + 1;
 
-    // Process files
+    // Process files (skip the current prefix marker and directory markers)
     let files: Vec<S3Object> = result
         .contents()
         .iter()
-        .filter(|obj| obj.key().map(|k| k != prefix).unwrap_or(false))
+        .filter(|obj| {
+            obj.key()
+                .map(|k| k != prefix && !k.ends_with('/'))
+                .unwrap_or(false)
+        })
         .map(|obj| {
             let key = obj.key().unwrap_or("");
             let full_path = key.get(prefix_len..).unwrap_or("");
@@ -60,8 +65,7 @@ pub async fn list_objects(
                 size: Some(obj.size().unwrap_or(0)),
                 last_modified: obj
                     .last_modified()
-                    .and_then(|dt| chrono::DateTime::parse_from_rfc3339(dt.as_ref()).ok())
-                    .map(|dt| dt.with_timezone(&chrono::Utc)),
+                    .and_then(|dt| chrono::DateTime::from_timestamp(dt.secs(), dt.subsec_nanos())),
                 is_directory: false,
             }
         })
@@ -125,35 +129,33 @@ pub async fn delete_directory_recursive(
             .await
             .map_err(|e| AppError::S3Generic(e.to_string()))?;
 
-        if let Some(contents) = result.contents() {
-            if !contents.is_empty() {
-                let objects: Vec<_> = contents
-                    .iter()
-                    .filter_map(|obj| {
-                        obj.key().map(|key| {
-                            aws_sdk_s3::types::ObjectIdentifier::builder()
-                                .key(key)
-                                .build()
-                                .ok()
-                        })
+        let contents = result.contents();
+        if !contents.is_empty() {
+            let objects: Vec<_> = contents
+                .iter()
+                .filter_map(|obj| {
+                    obj.key().and_then(|key| {
+                        aws_sdk_s3::types::ObjectIdentifier::builder()
+                            .key(key)
+                            .build()
+                            .ok()
                     })
-                    .flatten()
-                    .collect();
+                })
+                .collect();
 
-                if !objects.is_empty() {
-                    client
-                        .delete_objects()
-                        .bucket(bucket)
-                        .delete(
-                            aws_sdk_s3::types::Delete::builder()
-                                .set_objects(Some(objects))
-                                .build()
-                                .map_err(|e| AppError::S3Generic(e.to_string()))?,
-                        )
-                        .send()
-                        .await
-                        .map_err(|e| AppError::S3Generic(e.to_string()))?;
-                }
+            if !objects.is_empty() {
+                client
+                    .delete_objects()
+                    .bucket(bucket)
+                    .delete(
+                        aws_sdk_s3::types::Delete::builder()
+                            .set_objects(Some(objects))
+                            .build()
+                            .map_err(|e| AppError::S3Generic(e.to_string()))?,
+                    )
+                    .send()
+                    .await
+                    .map_err(|e| AppError::S3Generic(e.to_string()))?;
             }
         }
 
@@ -171,7 +173,7 @@ pub async fn get_object(
     client: &Client,
     bucket: &str,
     key: &str,
-) -> Result<(Vec<u8>, String), AppError> {
+) -> Result<(ByteStream, String), AppError> {
     let result = client
         .get_object()
         .bucket(bucket)
@@ -185,15 +187,7 @@ pub async fn get_object(
         .unwrap_or("application/octet-stream")
         .to_string();
 
-    let body = result
-        .body
-        .collect()
-        .await
-        .map_err(|e| AppError::S3Generic(e.to_string()))?
-        .into_bytes()
-        .to_vec();
-
-    Ok((body, content_type))
+    Ok((result.body, content_type))
 }
 
 pub async fn put_object(

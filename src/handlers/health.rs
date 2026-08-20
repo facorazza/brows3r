@@ -11,7 +11,13 @@ pub async fn health_check() -> impl IntoResponse {
 
 /// Readiness check - returns 200 if service is ready to accept traffic
 /// Checks database connectivity
-pub async fn readiness_check(State(state): State<AppState>) -> impl IntoResponse {
+pub async fn readiness_check<DB: sqlx::Database>(
+    State(state): State<AppState<DB>>,
+) -> impl IntoResponse
+where
+    for<'c> &'c mut DB::Connection: sqlx::Executor<'c, Database = DB>,
+    for<'q> <DB as sqlx::Database>::Arguments<'q>: sqlx::IntoArguments<'q, DB>,
+{
     metrics::counter!("readiness_check_total").increment(1);
 
     // Check database connectivity
@@ -41,6 +47,6 @@ pub async fn readiness_check(State(state): State<AppState>) -> impl IntoResponse
 }
 
 /// Prometheus metrics endpoint
-pub async fn metrics(State(state): State<AppState>) -> String {
+pub async fn metrics<DB: sqlx::Database>(State(state): State<AppState<DB>>) -> String {
     state.metrics_handle.render()
 }

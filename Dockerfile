@@ -1,5 +1,5 @@
 # Build stage
-FROM rust:1.75-slim as builder
+FROM rust:1.88-slim as builder
 
 WORKDIR /app
 
@@ -9,8 +9,9 @@ RUN apt-get update && apt-get install -y \
     libssl-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy manifests
-COPY Cargo.toml Cargo.lock* ./
+# Copy manifests and fetch dependencies for caching
+COPY Cargo.toml Cargo.lock ./
+RUN cargo fetch --locked
 
 # Copy source code
 COPY src ./src
@@ -18,7 +19,7 @@ COPY templates ./templates
 COPY migrations ./migrations
 
 # Build the application
-RUN cargo build --release
+RUN cargo build --release --locked
 
 # Runtime stage
 FROM debian:bookworm-slim
