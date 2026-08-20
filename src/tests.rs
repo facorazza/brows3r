@@ -76,7 +76,7 @@ mod tests {
         // Build the router (same as main.rs)
         let app = crate::build_router(state, session_store);
 
-        TestServer::new(app).unwrap()
+        TestServer::new(app)
     }
 
     #[tokio::test]
