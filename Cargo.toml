@@ -34,7 +34,13 @@ sqlx = { version = "0.8.6", features = [
 
 # S3
 aws-config = { version = "1.8.12", features = ["behavior-version-latest"] }
-aws-sdk-s3 = "1.119.0"
+aws-sdk-s3 = { version = "1.143.0", default-features = false, features = [
+    "behavior-version-latest",
+    "sigv4a",
+    "http-1x",
+    "default-https-client",
+    "rt-tokio",
+] }
 
 # Serialization
 serde = { version = "1.0.228", features = ["derive"] }
