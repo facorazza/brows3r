@@ -7,10 +7,13 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y \
     pkg-config \
     libssl-dev \
+    cmake \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy manifests and fetch dependencies for caching
 COPY Cargo.toml Cargo.lock ./
+# Dummy target so cargo accepts the manifest before real sources are copied
+RUN mkdir -p src && echo "fn main() {}" > src/main.rs
 RUN cargo fetch --locked
 
 # Copy source code
