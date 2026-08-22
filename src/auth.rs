@@ -10,6 +10,7 @@ use crate::{error::AppError, models::User, state::AppState};
 
 const USER_ID_KEY: &str = "user_id";
 
+#[allow(clippy::result_large_err)] // Response is large but this is a middleware hot path
 pub async fn require_auth<DB: sqlx::Database>(
     State(state): State<AppState<DB>>,
     session: Session,
